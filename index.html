@@ -110,23 +110,18 @@ async function connectUser(user){
  try{
   debugStep='写入个人资料 users/'+user.uid;
   const userRef=doc(db,'users',user.uid);await setDoc(userRef,{email:user.email||'',name:user.displayName||user.email?.split('@')[0]||'用户'},{merge:true});
-  // First try the known document ID (the owner created the space using their UID).
-  // Fall back to the array-contains query for spaces with a different document ID.
-  let space = null;
-  debugStep='读取 spaces/'+user.uid;
-  const directSpaceSnap = await getDoc(doc(db,'spaces',user.uid));
-  if (directSpaceSnap.exists()) {
-    const directData = directSpaceSnap.data();
-    if (Array.isArray(directData.members) && directData.members.includes(user.uid)) {
-      space = directSpaceSnap;
-    }
-  }
-  if (!space) {
-    debugStep='查询 spaces 的 members 数组';
-    const q=query(collection(db,'spaces'),where('members','array-contains',user.uid),limit(1));
-    const snap=await getDocs(q);
-    if (!snap.empty) space=snap.docs[0];
-  }
+let space = null;
+debugStep='查询 spaces 的 members 数组';
+
+const q=query(
+  collection(db,'spaces'),
+  where('members','array-contains',user.uid),
+  limit(1)
+);
+
+const snap=await getDocs(q);
+if (!snap.empty) space=snap.docs[0];
+    
   if(!space){showWaiting(user.uid);return;}
   spaceId=space.id;spaceMembers=space.data().members||[];
   const oldWait=document.getElementById('waitScreen');if(oldWait)oldWait.remove();
