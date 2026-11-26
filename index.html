@@ -106,11 +106,14 @@ function stopCloud(){if(unsubTransactions){unsubTransactions();unsubTransactions
 function showWaiting(uid){showAuth(false);let old=document.getElementById('waitScreen');if(old)old.remove();let box=document.createElement('section');box.id='waitScreen';box.className='authscreen';box.innerHTML=`<div class="authcard"><div style="font-size:30px">🌱</div><h1>账号已登录</h1><p>但这个账号还没有加入你们的共同储蓄空间。</p><div class="waitcard"><b>你的 UID</b><p style="overflow-wrap:anywhere;margin:8px 0">${esc(uid)}</p><button class="secondary wide" id="copyUidBtn">复制 UID</button></div><p>请让空间拥有者把这个 UID 加入 Firestore 的 spaces → 对应文件 → members 数组。加入后重新登录即可。</p><button class="primary wide" id="waitLogout">退出登录</button></div>`;document.body.insertBefore(box,document.querySelector('main.app'));$('copyUidBtn').onclick=async()=>{try{await navigator.clipboard.writeText(uid);$('copyUidBtn').textContent='已复制';}catch{prompt('请复制你的 UID',uid);}};$('waitLogout').onclick=()=>signOut(auth);}
 async function connectUser(user){
  currentUser=user;stopCloud();data={me:[],partner:[],goals:[]};viewOwner='me';
+ let debugStep='准备连接';
  try{
+  debugStep='写入个人资料 users/'+user.uid;
   const userRef=doc(db,'users',user.uid);await setDoc(userRef,{email:user.email||'',name:user.displayName||user.email?.split('@')[0]||'用户'},{merge:true});
   // First try the known document ID (the owner created the space using their UID).
   // Fall back to the array-contains query for spaces with a different document ID.
   let space = null;
+  debugStep='读取 spaces/'+user.uid;
   const directSpaceSnap = await getDoc(doc(db,'spaces',user.uid));
   if (directSpaceSnap.exists()) {
     const directData = directSpaceSnap.data();
@@ -119,6 +122,7 @@ async function connectUser(user){
     }
   }
   if (!space) {
+    debugStep='查询 spaces 的 members 数组';
     const q=query(collection(db,'spaces'),where('members','array-contains',user.uid),limit(1));
     const snap=await getDocs(q);
     if (!snap.empty) space=snap.docs[0];
@@ -137,7 +141,7 @@ async function connectUser(user){
     render();
   },err=>alert('读取账单失败：'+(err.code||err.message)));
   unsubGoals=onSnapshot(collection(db,'spaces',spaceId,'goals'),ss=>{data.goals=ss.docs.map(d=>({id:d.id,...d.data()}));render();},err=>alert('读取储蓄目标失败：'+(err.code||err.message)));
- }catch(err){showAuth(true);authMessage('连接数据库失败：'+(err.code||err.message),'error');}
+ }catch(err){showAuth(true);authMessage('连接数据库失败（步骤：'+debugStep+'）：'+(err.code||err.message),'error');}
 }
 $('loginBtn').onclick=async()=>{let email=$('authEmail').value.trim(),password=$('authPassword').value;if(!email||!password){authMessage('请填写邮箱和密码。','error');return;}authMessage('正在登录…');try{await signInWithEmailAndPassword(auth,email,password);}catch(err){authMessage('登录失败：'+(err.code||err.message),'error');}};
 $('registerBtn').onclick=async()=>{let name=$('authName').value.trim(),email=$('authEmail').value.trim(),password=$('authPassword').value;if(!name||!email||!password){authMessage('注册时请填写昵称、邮箱和密码。','error');return;}if(password.length<6){authMessage('密码至少需要 6 个字符。','error');return;}authMessage('正在注册…');try{const cred=await createUserWithEmailAndPassword(auth,email,password);await setDoc(doc(db,'users',cred.user.uid),{email,name,createdAt:serverTimestamp()},{merge:true});authMessage('注册成功，正在连接储蓄空间…','ok');}catch(err){authMessage('注册失败：'+(err.code||err.message),'error');}};
