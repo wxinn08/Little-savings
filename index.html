@@ -111,16 +111,19 @@ async function connectUser(user){
   debugStep='写入个人资料 users/'+user.uid;
   const userRef=doc(db,'users',user.uid);await setDoc(userRef,{email:user.email||'',name:user.displayName||user.email?.split('@')[0]||'用户'},{merge:true});
 let space = null;
-debugStep='查询 spaces 的 members 数组';
+debugStep='读取正确的储蓄空间';
 
-const q=query(
-  collection(db,'spaces'),
-  where('members','array-contains',user.uid),
-  limit(1)
+const spaceSnap = await getDoc(
+  doc(db,'spaces','BzfuBjmtYMpmt3QQOgd')
 );
 
-const snap=await getDocs(q);
-if (!snap.empty) space=snap.docs[0];
+if (
+  spaceSnap.exists() &&
+  Array.isArray(spaceSnap.data().members) &&
+  spaceSnap.data().members.includes(user.uid)
+) {
+  space = spaceSnap;
+}
     
   if(!space){showWaiting(user.uid);return;}
   spaceId=space.id;spaceMembers=space.data().members||[];
