@@ -108,9 +108,23 @@ async function connectUser(user){
  currentUser=user;stopCloud();data={me:[],partner:[],goals:[]};viewOwner='me';
  try{
   const userRef=doc(db,'users',user.uid);await setDoc(userRef,{email:user.email||'',name:user.displayName||user.email?.split('@')[0]||'用户'},{merge:true});
-  const q=query(collection(db,'spaces'),where('members','array-contains',user.uid),limit(1));const snap=await getDocs(q);
-  if(snap.empty){showWaiting(user.uid);return;}
-  const space=snap.docs[0];spaceId=space.id;spaceMembers=space.data().members||[];
+  // First try the known document ID (the owner created the space using their UID).
+  // Fall back to the array-contains query for spaces with a different document ID.
+  let space = null;
+  const directSpaceSnap = await getDoc(doc(db,'spaces',user.uid));
+  if (directSpaceSnap.exists()) {
+    const directData = directSpaceSnap.data();
+    if (Array.isArray(directData.members) && directData.members.includes(user.uid)) {
+      space = directSpaceSnap;
+    }
+  }
+  if (!space) {
+    const q=query(collection(db,'spaces'),where('members','array-contains',user.uid),limit(1));
+    const snap=await getDocs(q);
+    if (!snap.empty) space=snap.docs[0];
+  }
+  if(!space){showWaiting(user.uid);return;}
+  spaceId=space.id;spaceMembers=space.data().members||[];
   const oldWait=document.getElementById('waitScreen');if(oldWait)oldWait.remove();
   $('profileBtn').textContent=(user.displayName||user.email||'我').slice(0,1).toUpperCase();$('profileBtn').title='退出登录';
   $('hello').textContent=`欢迎回来，${user.displayName||user.email||'朋友'}。今天也好好照顾自己的钱包。`;
